@@ -3,6 +3,13 @@
 A cookiecutter template to create Python packages. It's tailored for those working in Azure DevOps with Azure Pipelines
 and includes tools for testing, linting, documentation, versioning and publishing.
 
+## Usage
+Install [cookiecutter](https://cookiecutter.readthedocs.io/en/stable/installation.html) and then run:
+
+```shell
+cookiecutter https://github.com/tspanos/pythonPackageCookiecutter
+```
+
 ## Features
 
 - Python package setup with `src` layout.
