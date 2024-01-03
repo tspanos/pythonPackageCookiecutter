@@ -35,8 +35,8 @@ An example project using this template would have the following structure:
 └── src/
 |   └── <package_name>/
 |       └── __init__.py
-├── tests/
-│   ├── tests.py
+└── tests/
+    └── tests.py
 ```
 
 ## Azure Pipelines
