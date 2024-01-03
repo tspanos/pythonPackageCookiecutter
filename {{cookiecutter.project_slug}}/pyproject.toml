@@ -1,0 +1,107 @@
+[build-system]
+requires = ["setuptools>=65.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{{cookiecutter.project_slug}}"
+version = "{{cookiecutter.version}}"
+authors = [
+    { name = "{{cookiecutter.author_name}}", email = "{{cookiecutter.author_email}}" },
+]
+license = { file = "LICENSE.txt" }
+description = "{{cookiecutter.description}}"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+]
+
+dependencies = [
+
+]
+
+[project.urls]
+homepage = "{{cookiecutter.homepage_url}}"
+repository = "{{cookiecutter.repository_url}}"
+
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-asyncio",
+]
+
+
+docs = [
+    "mkdocs>=1.3",
+    "mkdocs-autorefs>=0.4.1",
+    "mkdocs-material>=7.3",
+    "mkdocstrings[python]>=0.19.0"
+]
+
+dev = [
+    "{{cookiecutter.package_name}}[test, docs]",
+    "ruff"
+]
+
+
+[tool.setuptools.package-data]
+"*" = ["*.jinja", "*.json"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+log_cli = "True"
+log_cli_level = "DEBUG"
+testpaths = [
+    "tests"
+]
+
+
+[tool.ruff]
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+line-length = 120
+indent-width = 4
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "N", "S", "ASYNC", "PT", "PL"]
+ignore = ["S101", "PLR2004"]
+fixable = ["ALL"]
+unfixable = []
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"

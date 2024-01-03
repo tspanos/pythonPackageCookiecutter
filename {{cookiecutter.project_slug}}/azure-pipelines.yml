@@ -1,0 +1,193 @@
+trigger: none
+
+parameters:
+  - name: azureFeed
+    type: string
+    displayName: Azure Feed (PROJECT_NAME/FEED_NAME)
+  - name: gitConfig
+    type: object
+    default:
+      email: 'azure-pipelines@microsoft.com'
+      name: 'Azure Pipelines CI'
+    displayName: Git Configuration
+  - name: pythonVersion
+    type: string
+    displayName: Python Version
+    default: '3.11'
+    values:
+      - '3.11'
+  - name: packageDirectory
+    type: string
+    displayName: Package Directory
+    default: '$(Build.SourcesDirectory)'
+
+stages:
+  - stage: TestPackage
+    displayName: 'Test Package Stage'
+
+    jobs:
+      - job: Lint
+        displayName: 'Lint Job'
+
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: ${{ parameters.pythonVersion }}
+            displayName: 'Set Python Version to ${{ parameters.pythonVersion }}'
+
+          - script: |
+              python -m pip install ruff
+              ruff .
+            workingDirectory: ${{ parameters.packageDirectory }}
+            displayName: 'Lint Python Code'
+            continueOnError: false
+
+      - job: Test
+        displayName: 'PyTest Job'
+
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: ${{ parameters.pythonVersion }}
+            displayName: 'Set Python Version to ${{ parameters.pythonVersion }}'
+
+          - script: |
+              python -m pip install --upgrade pip
+              pip install -e .[dev]
+            workingDirectory: ${{ parameters.packageDirectory }}
+            displayName: 'Install Package Dependencies'
+
+          - script: |
+              pip install pytest pytest-azurepipelines
+              pip install pytest-cov
+              pytest --doctest-modules --junitxml=junit/test-results.xml --cov=. --cov-report=xml
+            workingDirectory: ${{ parameters.packageDirectory }}
+            displayName: 'Run PyTest with Coverage'
+            continueOnError: false
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFiles: '**/test-*.xml'
+              searchFolder: ${{ parameters.packageDirectory }}
+              testRunTitle: 'PyTest Results'
+            displayName: 'Publish Test Results'
+
+          - task: PublishCodeCoverageResults@1
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: '**/coverage.xml'
+              reportDirectory: ${{ parameters.packageDirectory }}
+            displayName: 'Publish Code Coverage Results'
+
+  - stage: BuildPackage
+    displayName: 'Build Package Stage'
+    dependsOn:
+      - TestPackage
+
+    jobs:
+      - job: Build
+        displayName: 'Build Job'
+
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: ${{ parameters.pythonVersion }}
+            displayName: 'Set Python Version to ${{ parameters.pythonVersion }}'
+
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+            displayName: 'Checkout Repository'
+
+          - task: gitversion/setup@0
+            inputs:
+              versionSpec: '5.x'
+            displayName: 'Setup GitVersion'
+
+          - task: gitversion/execute@0
+            displayName: 'Execute GitVersion'
+
+          - script: |
+              echo Updating pyproject.toml with version number $(GitVersion.SemVer)...
+              sed -i "s/^version.*/version = \"$(GitVersion.SemVer)\"/" ${{ parameters.packageDirectory }}/pyproject.toml
+            displayName: 'Update Version in pyproject.toml'
+
+          - script: |
+              git config --global user.email "${{ parameters.gitConfig.email }}"
+              git config --global user.name "${{ parameters.gitConfig.name }}"
+            displayName: 'Configure Git User'
+
+          - script: |
+              pip install build
+              python -m build
+            workingDirectory: ${{ parameters.packageDirectory }}
+            displayName: 'Build Python Package'
+
+          - task: CopyFiles@2
+            inputs:
+              sourceFolder: '${{ parameters.packageDirectory }}/dist'
+              contents: '**'
+              targetFolder: '$(Build.ArtifactStagingDirectory)/dist'
+            displayName: 'Copy Package Artifacts'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)/dist'
+              ArtifactName: 'dist'
+            displayName: 'Publish Package Artifacts'
+
+          - script: |
+              set -e
+              echo Checking if tag already exists...
+              if ! git rev-parse $(GitVersion.SemVer) >/dev/null 2>&1; then
+                echo Tagging repository...
+                git tag $(GitVersion.SemVer) -m "Tag version $(GitVersion.SemVer) [skip ci]"
+                echo Pushing tag to repository...
+                git push origin HEAD:$(Build.SourceBranchName) --follow-tags
+              else
+                echo "Tag already exists."
+              fi
+            displayName: 'Create and Push Tag'
+
+  - stage: ReleaseFeed
+    displayName: 'Release to Azure Feed Stage'
+    dependsOn:
+      - TestPackage
+      - BuildPackage
+
+    jobs:
+      - job: Release
+        displayName: 'Release Job'
+
+        steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              artifactName: 'dist'
+              downloadPath: '$(System.ArtifactsDirectory)/dist'
+            displayName: 'Download Artifacts'
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: ${{ parameters.pythonVersion }}
+            displayName: 'Set Python Version to ${{ parameters.pythonVersion }}'
+
+          - task: TwineAuthenticate@1
+            inputs:
+              artifactFeed: ${{ parameters.azureFeed }}
+            displayName: 'Authenticate with Azure Artifact Feed'
+
+          - task: PythonScript@0
+            name: ExtractFeedName
+            inputs:
+              scriptSource: 'inline'
+              script: |
+                feed_name = "${{ parameters.azureFeed }}".split('/')[-1:][0]
+                print(f"##vso[task.setvariable variable=FEED_NAME]{feed_name}")
+            displayName: 'Extract Azure Feed Name'
+
+          - script: |
+              python -m pip install twine
+              python -m twine upload -r $(FEED_NAME) --config-file $(PYPIRC_PATH) $(System.ArtifactsDirectory)/dist/* --verbose
+            workingDirectory: ${{ parameters.packageDirectory }}
+            displayName: 'Upload Package to Azure Feed'
