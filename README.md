@@ -33,8 +33,10 @@ An example project using this template would have the following structure:
 │   ├── index.md
 │   └── installation.md
 └── src/
-    └── <package_name>/
-        └── __init__.py
+|   └── <package_name>/
+|       └── __init__.py
+├── tests/
+│   ├── tests.py
 ```
 
 ## Azure Pipelines
